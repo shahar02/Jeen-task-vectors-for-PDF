@@ -22,7 +22,7 @@ def extract_text_from_pdf(file_path):
                 text += page_text + "\n"
     return text
 
-# ───── שלב 2: חיתוך לחנקס ─────
+# ───── שלב 2: חיתוך לצנקס ─────
 def chunk_fixed_size(text, chunk_size=300, overlap=50):
     chunks = []
     start = 0
@@ -57,7 +57,7 @@ def save_to_db(chunks, embeddings, filename, strategy):
         )
     """)
 
-    # הכנסת כל חנקס
+    # הכנסת כל צנקס
     for chunk, emb in zip(chunks, embeddings):
         cur.execute("""
             INSERT INTO documents (chunk_text, embedding, filename, split_strategy)
@@ -67,7 +67,7 @@ def save_to_db(chunks, embeddings, filename, strategy):
     conn.commit()
     cur.close()
     conn.close()
-    print(f"נשמרו {len(chunks)} חנקס בהצלחה!")
+    print(f"נשמרו {len(chunks)} צנקס בהצלחה!")
 
 # ───── הרצה ראשית ─────
 if __name__ == "__main__":
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     print("שלב 2: חותך לחנקס...")
     chunks = chunk_fixed_size(text)
-    print(f"נוצרו {len(chunks)} חנקס")
+    print(f"נוצרו {len(chunks)} צנקס")
 
     print("שלב 3: שולח לגמיני...")
     embeddings = [get_embedding(c) for c in chunks]
