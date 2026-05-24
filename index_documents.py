@@ -1,9 +1,11 @@
 import os
-import json
+import sys
 import pdfplumber
+from docx import Document
 from google import genai
 from dotenv import load_dotenv
 import psycopg2
+from pgvector.psycopg2 import register_vector
 
 # ───── טוען מפתחות מקובץ .env ─────
 load_dotenv()
@@ -12,7 +14,7 @@ POSTGRES_URL = os.getenv("POSTGRES_URL")
 
 client = genai.Client(api_key=API_KEY)
 
-# ───── שלב 1: חילוץ טקסט מ-PDF ─────
+# ───── שלב א1: חילוץ טקסט מ-PDF ─────
 def extract_text_from_pdf(file_path):
     text = ""
     with pdfplumber.open(file_path) as pdf:
@@ -20,6 +22,15 @@ def extract_text_from_pdf(file_path):
             page_text = page.extract_text()
             if page_text:
                 text += page_text + "\n"
+    return text
+
+# ───── שלב 1ב: חילוץ טקסט מ-DOCX ─────
+def extract_text_from_docx(file_path):
+    doc = Document(file_path)
+    text = ""
+    for paragraph in doc.paragraphs:
+        if paragraph.text:
+            text += paragraph.text + "\n"
     return text
 
 # ───── שלב 2: חיתוך לצנקס ─────
@@ -41,28 +52,31 @@ def get_embedding(text):
     return result.embeddings[0].values
 
 # ───── שלב 4: שמירה ב-PostgreSQL ─────
+
 def save_to_db(chunks, embeddings, filename, strategy):
     conn = psycopg2.connect(POSTGRES_URL)
-    cur  = conn.cursor()
+    cur = conn.cursor()
 
-    # יצירת טבלה אם לא קיימת
+    register_vector(conn)
+
+    cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS documents (
-            id            SERIAL PRIMARY KEY,
-            chunk_text    TEXT,
-            embedding     JSONB,
-            filename      TEXT,
+            id SERIAL PRIMARY KEY,
+            chunk_text TEXT,
+            embedding vector(3072),
+            filename TEXT,
             split_strategy TEXT,
-            created_at    TIMESTAMP DEFAULT NOW()
+            created_at TIMESTAMP DEFAULT NOW()
         )
     """)
 
-    # הכנסת כל צנקס
     for chunk, emb in zip(chunks, embeddings):
         cur.execute("""
             INSERT INTO documents (chunk_text, embedding, filename, split_strategy)
             VALUES (%s, %s, %s, %s)
-        """, (chunk, json.dumps(emb), filename, strategy))
+        """, (chunk, emb, filename, strategy))
 
     conn.commit()
     cur.close()
@@ -70,12 +84,30 @@ def save_to_db(chunks, embeddings, filename, strategy):
     print(f"נשמרו {len(chunks)} צנקס בהצלחה!")
 
 # ───── הרצה ראשית ─────
+
 if __name__ == "__main__":
-    file_path = "מטלת בית Solutions - .pdf"
-    strategy  = "fixed"
+    if len(sys.argv) < 2:
+        print("שגיאה: יש לציין נתיב לקובץ.")
+        print("שימוש: python index_documents.py <נתיב_לקובץ> [אסטרטגיה]")
+        sys.exit(1)
+
+    file_path = sys.argv[1]
+    strategy = sys.argv[2] if len(sys.argv) > 2 else "fixed"
+
+    if not os.path.exists(file_path):
+        print(f"שגיאה: הקובץ '{file_path}' לא נמצא.")
+        sys.exit(1)
+
+    ext = os.path.splitext(file_path)[1].lower()
 
     print("שלב 1: קורא קובץ...")
-    text = extract_text_from_pdf(file_path)
+    if ext == ".pdf":
+        text = extract_text_from_pdf(file_path)
+    elif ext == ".docx":
+        text = extract_text_from_docx(file_path)
+    else:
+        print(f"שגיאה: סוג קובץ לא נתמך '{ext}'. יש להשתמש ב-PDF או DOCX.")
+        sys.exit(1)
     print(f"חולץ {len(text)} תווים")
 
     print("שלב 2: חותך לחנקס...")
