@@ -20,7 +20,12 @@
 git clone https://github.com/shahar02/Jeen-task-vectors-for-PDF.git
 
 2. התקינו ספריות:
-pip install -r requirements.txt
+pdfplumber
+python-docx
+google-genai
+psycopg2-binary
+pgvector
+python-dotenv
 
 3. צרו קובץ .env בתיקיית הפרויקט:
 GEMINI_API_KEY=המפתח_שלכם
@@ -31,8 +36,10 @@ POSTGRES_URL=postgresql://postgres:הסיסמה_שלכם@localhost:5432/postgres
 ## שימוש
 
 python index_documents.py "שם_הקובץ.pdf"
+python index_documents.py "שם_הקובץ.docx"
 
 ---
+
 
 ## השלבים שהקוד עושה
 
